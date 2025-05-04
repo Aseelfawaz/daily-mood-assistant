@@ -1,5 +1,6 @@
 import streamlit as st
 from textblob import TextBlob
+from googletrans import Translator
 import requests
 import pandas as pd
 from datetime import datetime
@@ -7,15 +8,15 @@ import os
 import altair as alt
 
 # إعداد صفحة Streamlit
-st.set_page_config(page_title="Daily Mood Assistant", layout="centered")
+st.set_page_config(page_title="Daily Mood Assistant")
 st.title("🌤️ Daily Mood Assistant")
-st.markdown("💖 *اكتب شعورك وسنقترح لك أنشطة، ونعرض لك آية قرآنية تلامس حالتك*")
+st.markdown("💖 اكتب شعورك وسنقترح لك أنشطة، ونعرض لك آية قرآنية تلامس حالتك")
 
 # الآيات حسب الشعور
 ayah_api_ids = {
-    "سلبي": "12:18",   # فَصَبْرٌ جَمِيلٌ
-    "محايد": "13:28",  # أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ
-    "إيجابي": "14:34"  # وَآتَاكُم مِّن كُلِّ مَا سَأَلْتُمُوهُ
+    "سلبي": "12:18",
+    "محايد": "13:28",
+    "إيجابي": "14:34"
 }
 
 # الأنشطة المقترحة حسب الشعور
@@ -25,21 +26,21 @@ activities = {
     "إيجابي": ["💬 شارك طاقتك", "💪 مارس رياضة", "🧠 تعلم شيء جديد"]
 }
 
-# دالة لجلب الآية من API
+# دالة لجلب الآية
 def get_ayah(ayah_id):
-    try:
-        url = f"http://api.alquran.cloud/v1/ayah/{ayah_id}/ar"
-        response = requests.get(url)
-        if response.status_code == 200:
-            return response.json()["data"]["text"]
-    except:
-        pass
-    return "📖 (تعذر جلب الآية)"
+    url = f"http://api.alquran.cloud/v1/ayah/{ayah_id}/ar"
+    response = requests.get(url)
+    return response.json()["data"]["text"] if response.status_code == 200 else "📖 (تعذر جلب الآية)"
 
-# دالة تصنيف الشعور باستخدام TextBlob
+# ✅ دالة تصنيف الشعور باستخدام الترجمة أولًا
 def classify_sentiment(text):
-    analysis = TextBlob(text)
+    translator = Translator()
+    translated = translator.translate(text, src='ar', dest='en')
+    translated_text = translated.text
+
+    analysis = TextBlob(translated_text)
     polarity = analysis.sentiment.polarity
+
     if polarity < -0.2:
         return "سلبي", polarity
     elif polarity > 0.2:
@@ -47,13 +48,13 @@ def classify_sentiment(text):
     else:
         return "محايد", polarity
 
-# دالة لتخزين الشعور في CSV
+# دالة لتخزين الشعور
 def save_mood(mood):
     df = pd.DataFrame([{"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "mood": mood}])
     df.to_csv("mood_log.csv", mode='a', header=not os.path.exists("mood_log.csv"), index=False)
 
 # إدخال المستخدم
-user_input = st.text_input("📝 اكتب شعورك بكلمة أو جملة:")
+user_input = st.text_input("🧠 اكتب شعورك بكلمة أو جملة:")
 
 # التبويبات
 tab1, tab2 = st.tabs(["🧠 التحليل والأنشطة", "📊 سجل حالتي النفسية"])
@@ -71,12 +72,12 @@ with tab1:
             ayah_text = get_ayah(ayah_api_ids[mood])
             st.markdown(f"📖 قال تعالى:\n> **{ayah_text}**")
 
-            # عرض الأنشطة المقترحة
+            # الأنشطة
             st.subheader("🎯 اقتراحات لأنشطتك اليوم:")
             for activity in activities[mood]:
                 st.write(f"✅ {activity}")
 
-# التبويب الثاني: عرض المخطط الزمني
+# التبويب الثاني: مخطط زمني
 with tab2:
     with st.expander("📈 المخطط الزمني لتغير حالتك النفسية"):
         try:
@@ -92,9 +93,10 @@ with tab2:
             ).properties(
                 title="⏱️ تسلسل مشاعرك بمرور الوقت",
                 width=700,
-                height=250
+                height=200
             )
 
             st.altair_chart(chart, use_container_width=True)
+
         except FileNotFoundError:
-            st.info("📁 لا توجد بيانات محفوظة حتى الآن.")
+            st.info("لا توجد بيانات محفوظة حتى الآن.")
