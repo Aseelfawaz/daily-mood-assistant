@@ -1,5 +1,5 @@
 import streamlit as st
-from transformers import pipeline
+from textblob import TextBlob
 import requests
 import pandas as pd
 from datetime import datetime
@@ -9,10 +9,7 @@ import altair as alt
 # إعداد صفحة Streamlit
 st.set_page_config(page_title="Daily Mood Assistant")
 st.title("🌤️ Daily Mood Assistant")
-st.markdown("اكتب شعورك وسنقترح لك أنشطة، ونعرض لك آية قرآنية تلامس حالتك 💖")
-
-# نموذج تحليل المشاعر
-classifier = pipeline("sentiment-analysis", model="nlptown/bert-base-multilingual-uncased-sentiment")
+st.markdown("💖 اكتب شعورك وسنقترح لك أنشطة، ونعرض لك آية قرآنية تلامس حالتك")
 
 # الآيات حسب الشعور
 ayah_api_ids = {
@@ -34,6 +31,17 @@ def get_ayah(ayah_id):
     response = requests.get(url)
     return response.json()["data"]["text"] if response.status_code == 200 else "📖 (تعذر جلب الآية)"
 
+# دالة تصنيف الشعور باستخدام TextBlob
+def classify_sentiment(text):
+    analysis = TextBlob(text)
+    polarity = analysis.sentiment.polarity
+    if polarity < -0.2:
+        return "سلبي", polarity
+    elif polarity > 0.2:
+        return "إيجابي", polarity
+    else:
+        return "محايد", polarity
+
 # دالة لتخزين الشعور
 def save_mood(mood):
     df = pd.DataFrame([{"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "mood": mood}])
@@ -49,19 +57,9 @@ tab1, tab2 = st.tabs(["🧠 التحليل والأنشطة", "📊 سجل حا�
 with tab1:
     if user_input:
         with st.spinner("🔍 جاري تحليل مشاعرك..."):
-            result = classifier(user_input)
-            label = result[0]['label']
-            score = result[0]['score']
-
-            if "1" in label or "2" in label:
-                mood = "سلبي"
-            elif "3" in label:
-                mood = "محايد"
-            else:
-                mood = "إيجابي"
-
-            st.success(f"💡 التحليل: {label} | الثقة: {score:.2f}")
-            st.write(f"🌈 شعورك تم تصنيفه على أنه: **{mood}**")
+            mood, polarity = classify_sentiment(user_input)
+            st.success(f"💡 الشعور: {mood} | درجة الإيجابية: {polarity:.2f}")
+            st.write(f"🌈 تم تصنيف شعورك على أنه: **{mood}**")
             save_mood(mood)
 
             # عرض الآية
@@ -81,15 +79,15 @@ with tab2:
             df["timestamp"] = pd.to_datetime(df["timestamp"])
             df["mood"] = df["mood"].str.strip()
 
-            chart = alt.Chart(df).mark_circle(size=100).encode(
+            chart = alt.Chart(df).mark_line(point=True).encode(
                 x='timestamp:T',
-                y=alt.value(0),
+                y=alt.Y('mood:N', sort=['سلبي', 'محايد', 'إيجابي']),
                 color='mood:N',
                 tooltip=['timestamp:T', 'mood:N']
             ).properties(
                 title="⏱️ تسلسل مشاعرك بمرور الوقت",
                 width=700,
-                height=150
+                height=200
             )
 
             st.altair_chart(chart, use_container_width=True)

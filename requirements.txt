@@ -1,5 +1,5 @@
 streamlit
-transformers
-requests
+textblob
 pandas
+requests
 altair
