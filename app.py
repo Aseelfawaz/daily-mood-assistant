@@ -7,15 +7,15 @@ import os
 import altair as alt
 
 # إعداد صفحة Streamlit
-st.set_page_config(page_title="Daily Mood Assistant")
+st.set_page_config(page_title="Daily Mood Assistant", layout="centered")
 st.title("🌤️ Daily Mood Assistant")
-st.markdown("💖 اكتب شعورك وسنقترح لك أنشطة، ونعرض لك آية قرآنية تلامس حالتك")
+st.markdown("💖 *اكتب شعورك وسنقترح لك أنشطة، ونعرض لك آية قرآنية تلامس حالتك*")
 
 # الآيات حسب الشعور
 ayah_api_ids = {
-    "سلبي": "12:18",
-    "محايد": "13:28",
-    "إيجابي": "14:34"
+    "سلبي": "12:18",   # فَصَبْرٌ جَمِيلٌ
+    "محايد": "13:28",  # أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ
+    "إيجابي": "14:34"  # وَآتَاكُم مِّن كُلِّ مَا سَأَلْتُمُوهُ
 }
 
 # الأنشطة المقترحة حسب الشعور
@@ -25,11 +25,16 @@ activities = {
     "إيجابي": ["💬 شارك طاقتك", "💪 مارس رياضة", "🧠 تعلم شيء جديد"]
 }
 
-# دالة لجلب الآية
+# دالة لجلب الآية من API
 def get_ayah(ayah_id):
-    url = f"http://api.alquran.cloud/v1/ayah/{ayah_id}/ar"
-    response = requests.get(url)
-    return response.json()["data"]["text"] if response.status_code == 200 else "📖 (تعذر جلب الآية)"
+    try:
+        url = f"http://api.alquran.cloud/v1/ayah/{ayah_id}/ar"
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json()["data"]["text"]
+    except:
+        pass
+    return "📖 (تعذر جلب الآية)"
 
 # دالة تصنيف الشعور باستخدام TextBlob
 def classify_sentiment(text):
@@ -42,13 +47,13 @@ def classify_sentiment(text):
     else:
         return "محايد", polarity
 
-# دالة لتخزين الشعور
+# دالة لتخزين الشعور في CSV
 def save_mood(mood):
     df = pd.DataFrame([{"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "mood": mood}])
     df.to_csv("mood_log.csv", mode='a', header=not os.path.exists("mood_log.csv"), index=False)
 
 # إدخال المستخدم
-user_input = st.text_input("🧠 اكتب شعورك بكلمة أو جملة:")
+user_input = st.text_input("📝 اكتب شعورك بكلمة أو جملة:")
 
 # التبويبات
 tab1, tab2 = st.tabs(["🧠 التحليل والأنشطة", "📊 سجل حالتي النفسية"])
@@ -66,12 +71,12 @@ with tab1:
             ayah_text = get_ayah(ayah_api_ids[mood])
             st.markdown(f"📖 قال تعالى:\n> **{ayah_text}**")
 
-            # الأنشطة
+            # عرض الأنشطة المقترحة
             st.subheader("🎯 اقتراحات لأنشطتك اليوم:")
             for activity in activities[mood]:
                 st.write(f"✅ {activity}")
 
-# التبويب الثاني: مخطط زمني
+# التبويب الثاني: عرض المخطط الزمني
 with tab2:
     with st.expander("📈 المخطط الزمني لتغير حالتك النفسية"):
         try:
@@ -87,10 +92,9 @@ with tab2:
             ).properties(
                 title="⏱️ تسلسل مشاعرك بمرور الوقت",
                 width=700,
-                height=200
+                height=250
             )
 
             st.altair_chart(chart, use_container_width=True)
-
         except FileNotFoundError:
-            st.info("لا توجد بيانات محفوظة حتى الآن.")
+            st.info("📁 لا توجد بيانات محفوظة حتى الآن.")
